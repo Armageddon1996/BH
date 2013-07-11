@@ -114,4 +114,49 @@ function serverCmdcompassloop(%client)
 		messageAll('',"Compass loop initiated.");
 	}
 }
-//^^^^COMPASS^^^^/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//^^^^ COMPASS ^^^^/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+function MinigameSO::BH_timer(%this, %new)
+{
+    if(isEventPending(%this.timerSchedule))
+        cancel(%this.timerSchedule);
+        
+    if(%this.timerNumber <= 0)
+    {
+        %this.BH_timerNotification(1);
+        return;
+    }
+    
+    if(%new)
+        %this.timerNumber = 8;
+    
+    messageAll('', %this.timerNumber SPC "minute(s) remaining.");
+    %this.timerNumber--;
+    
+    %this.timerSchedule = %this.schedule(60000, BH_timer);
+}
+
+function MinigameSO::BH_timerNotification(%this, %new)
+{
+    if(isEventPending(%this.countdownSchedule)
+        cancel(%this.countdownSchedule);
+        
+    if(%this.countdownNumber <= 0)
+    {
+        %this.reset(0);
+        return;
+    }
+    
+    if(%new)
+    {
+       %this.countdownNumber = 5;
+       if(isEventPending($compassSchedule))
+            cancel($compassSchedule);
+    }
+    
+    %this.bottomprintAll(%this.countdownNumber@" seconds remaining until the Mini-game resets.");
+    %this.countdownNumber--;
+    
+    %this.countdownSchedule = %this.schedule(1000, BH_timerNotification);
+}
+
