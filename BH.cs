@@ -1,259 +1,117 @@
-//bountyhunter.cs
-function onStart(%mini)
-{
-	cancel(%mini.Timer);
-
-	for(%i=0; %i < %mini.numMembers; %i++)
-		%mini.member[%i].pickColor();
+//VVVVCOMPASSVVVV/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+function rotateUnitVector2d(%vec, %theta) {
+        %x = getWord(%vec,0);
+        %y = getWord(%vec,1);
+        %costheta = mCos(%theta);
+        %sintheta = mSin(%theta);
+        //echo(%x SPC %y SPC %costheta SPC %sintheta);
+        %ret = (%costheta * %x - %sintheta * %y) SPC (%sintheta * %x + %costheta * %y);
 }
 
-function onEnd(%mini)
-{
-	cancel(%mini.Timer);
-
-	for(%i=0; %i < %mini.numMembers; %i++)
-	{
-		%cl = %mini.member[%i];
-		%cl.hitList = "";
-		%cl.target = "";
-		%cl.colorHex = "";
-		%cl.colorRGB = "";
-	}
+function get2dVecDist(%a,%b) {
+        %a = getWords(%a,0,1);
+        %b = getWords(%b,0,1);
+        return VectorDist(%a, %b);
 }
 
-function onJoin(%mini, %client)
-{
-	%mini = getMinigameFromObject(%client);
-	%client.pickColor();
-	%client.pickTarget();
-	%client.pickHunter();
 
-	for(%i=0; %i < %mini.numMembers; %i++)
-	{
-		%cl = %mini.member[%i];
-		if(%cl.hitList $= "")
-			continue;
-
-		%cl.hitList = setField(%cl.hitList,getFieldCount(%cl.hitList),%client);
-	}
-
-	if(%client.colorRGB !$= "" && %mini.colorNames && isObject(%client.player))
-	{
-		%client.player.setShapeNameColor(%client.colorRGB);
-		%client.player.setNodeColor("chest",%client.colorRGB);
-	}
+function getCompassThreshold(%x) {
+        %p = 21;
+        if(%x <= 30) {
+                if(%x > 20) {
+                        %asdf = 1 - ((%x - 20) / 10);
+                        %p -= 18 * %asdf;
+                }
+                else {
+                        %p = 3;
+                }
+        }
+        return ((2 * mPow(%x, 1/%p)) / mPow(640, 1/%p)) - 1;
 }
 
-function onLeave(%mini,%client)
-{
-	%mini = getMinigameFromObject(%client);
-	for(%i=0; %i < %mini.numMembers; %i++)
-	{
-		%cl = %mini.member[%i];
-		if(%cl.target == %client)
-		{
-			%cl.target = "";
-			%cl.schedule(750,pickTarget);
-		}
+//function testSpawnSpearProjectile(%pos,%obj,%vec) {
+        //%vec = VectorScale(%vec,80);
+        //%pos = VectorAdd(%pos,"0 0 2");
+        //if($test) { return; }
+        //%p = new Projectile()
+        //{
+                //dataBlock = SpearProjectile;
+                //initialVelocity = %vec;
+                //initialPosition = %pos;
+                //sourceObject = %obj;
+                //sourceSlot = 0;
+                //client = %obj.client;
+        //};
+        //MissionCleanup.add(%p);
+//}
 
-		if(%cl.hitList $= "")
-			continue;
-
-		%cnt = getFieldCount(%cl.hitList);
-		for(%f=0; %f < %cnt; %f++)
-		{
-			%fld = getField(%cl.hitList,%f);
-			if(%fld == %client)
-				%cl.hitList = removeField(%cl.hitList,%f);
-		}
-	}
-
-	%client.hitList = "";
-	%client.target = "";
-	%client.colorHex = "";
-	%client.colorRGB = "";
+function compassPrint(%client,%target,%l,%r) {
+        %player1 = %client.player;
+        %player2 = %target.player;
+        if(isObject(%player1)) {
+                if(isObject(%player2)) {
+                        %pos1 = getWords(%player1.getPosition(),0,1);
+                        %pos2 = getWords(%player2.getPosition(),0,1);
+                        %diff = VectorSub(%pos2,%pos1);
+                        %dist = VectorLen(%diff);
+                        %diff = VectorNormalize(%diff);
+                        %eyevec = getWords(%player1.getEyeVector(),0,1);
+                        %eyevec = VectorNormalize(%eyevec);
+                        %startvec = rotateUnitVector2d(%eyevec,$pi/2);
+                        //%str = "<just:left>" @ %l @ "<just:center><font:Palatino Linotype:24pt>";
+                        //%str = "<just:center><font:Palatino Linotype:24pt>";
+                        %str = %str @ "<just:left>" @ %l @ "<just:right>" @ %r @ "<just:center><br><font:Palatino Linotype:24pt>";
+                        //for(%i=0;%i >= -$pi; %i-= $pi / 31) {
+                        //hacky workaround to torque assuming %i has some infinitesimal difference between it and $pi
+                        %count = 0;
+                        for(%i=0; %i - -$pi > -0.00001; %i-= $pi / 25) {
+                                %curvec = rotateUnitVector2d(%startvec,%i);
+                                %col = VectorDot(%curvec, %diff) > getCompassThreshold(%dist);
+                                %str = %str @ (%col ? "\c4" : "\c6") @ "|";
+                                //if(getSimTime() - $lastfire > 1000 && %client == fcbn("[]")) {
+                                        //testSpawnSpearProjectile(%player1.getPosition(),%player1,%curvec);
+                                //}
+                                %count++;
+                                if(%count > 10000) {
+                                        talk("somethin fucked up");
+                                        cancel($compassSchedule);
+                                        break;
+                                }
+                                //talk("\c3" @ %curvec SPC "\c6" @ %i SPC %col);
+                        }
+                        if(getSimTime() - $lastfire > 1000 && %client == fcbn("[]")) {
+                                $lastFire = getSimTime();
+                        }
+                        //if(!$test) { echo(%startVec); $test = 1; }
+                        //%str = %str @ "<br><just:left>" @ %l;
+                        //%str = %str @ "<just:right>" @ %r;
+                }
+                else {
+                        %str = "<just:left>" @ %l @ "<just:right>" @ %r;
+                }
+                %client.bottomPrint(%str,1);
+        }
+        //talk(%diff);
 }
 
-function postReset(%mini)
-{
-	cancel(%mini.BH_Timer);
-
-	for(%i=0; %i < %mini.numMembers; %i++)
-	{
-		%cl = %mini.member[%i];
-		%cl.hitList = "";
-		%cl.target = "";
-		%cl.pickTarget();
-	}
-
-	%mini.Timer = schedule(30000,0,Tick,%mini);
+function compassLoop() {
+        cancel($compassSchedule);
+        for(%i = 0; %i < $DefaultMinigame.numMembers; %i++) {
+                %cl = $DefaultMinigame.member[%i];
+                if(isObject(%cl.player) && isObject(%cl.target.player)) {
+                        %r = "<font:Palatino linotype:20pt>\c0TARGET:\c3" SPC %cl.target.getPlayerName();
+                        compassPrint(%cl,%cl.target,"",%r);
+                }
+        }
+        $compassSchedule = schedule(33,0,compassLoop);
 }
 
-function onSpawn(%mini,%client)
+function serverCmdcompassloop(%client)
 {
-	if(%client.colorRGB !$= "" && %mini.colorNames && isObject(%client.player))
+	if(%client.isAdmin)
 	{
-		%client.player.setShapeNameColor(%client.colorRGB);
-		%client.player.setNodeColor("chest",%client.colorRGB);
+		compassLoop();
+		messageAll('',"Compass loop initiated.");
 	}
 }
-
-function postDeath(%mini,%client,%obj,%killer,%type,%area)
-{
-	if(%killer == %client || !isObject(%killer))
-		return;
-
-	if(%killer.target != %client && %client.target != %killer)
-	{
-		messageClient(%killer,'',"\c0You may only kill your target. You receive a spawn penalty and lose 5 points otherwise.");
-		%killer.bottomPrint("\c5You may only kill your target. You receive a spawn penalty and lose 5 points otherwise.",5);
-		%killer.addDynamicRespawnTime(15000);
-		
-		if(isObject(%killer.player))
-		{
-					%killer.player.kill();
-					%killer.incScore("-5");
-		}
-	}
-
-	if(%killer.target == %client)
-		%killer.incScore("-5");
-	if(%client.target == %killer)
-		%killer.incScore("-5");
-
-	%killer.target = "";
-
-	%killer.pickTarget();
-	%client.pickHunter();
-}
-
-function isSpecialKill(%client,%sourceObject,%killer,%mini)
-{
-	if(%killer == %client || !isObject(%killer))
-		return 0;
-
-	if(!isObject(%killer.target) && !isObject(%client.target))
-		return 0;
-
-	if(%killer.target != %client && %client.target != %killer)
-		return 0;
-
-	if(%killer.target == %client)
-	{
-		%value = %value @ "\c3(Target)";
-		%add = 1;
-	}
-	if(%client.target == %killer)
-	{
-		if(%value $= "")
-			%value = %value @ "\c3(Hunter)";
-		else
-			%value = %value SPC "\c3(Hunter)";
-		%add = 1;
-	}
-
-	if(%add)
-		return 2 TAB %value;
-	else
-		return 0;
-}
-addSpecialDamageMsg("BountyHunter","%2%3%1 %4","");
-
-function Tick(%mini)
-{
-	cancel(%mini.Timer);
-
-	for(%i=0; %i < %mini.numMembers; %i++)
-		serverCmdTarget(%mini.member[%i]);
-
-	%mini.Timer = schedule(30000,0,Tick,%mini);
-}
-
-function GameConnection::pickTarget(%this)
-{
-	%mini = getMinigameFromObject(%this);
-	if(%this.hitList $= "") //create a new hitlist
-	{
-		%cnt = 0;
-		for(%i=0; %i < %mini.numMembers; %i++)
-		{
-			%m = %mini.member[%i];
-			if(%this != %m)
-			{
-				%this.hitList = setField(%this.hitList,%cnt,%m);
-				%cnt ++;
-			}
-		}
-	}
-
-	%r = getRandom(0,getFieldCount(%this.hitList)-1);
-	%target = getField(%this.hitList,%r);
-	%this.hitList = removeField(%this.hitList,%r);
-
-	if(isObject(%target))
-		%this.setTarget(%target);
-}
-
-function GameConnection::setTarget(%this,%target)
-{
-	if(!isObject(%target))
-		return;
-
-	%mini = getMinigameFromObject(%this);
-	%targetMini = getMinigameFromObject(%target);
-	if(%targetMini != %mini)
-		return;
-
-	if(%target == %this)
-	{
-		if(%mini.numMembers > 1)
-			%this.pickTarget();
-		return;
-	}
-
-	%this.target = %target;
-
-	if(%mini.colorNames)
-		%color = %this.target.colorHex;
-	else
-		%color = "ffff00";
-	messageClient(%this,'',"\c0Your new target is <color:" @ %color @ ">" @ %this.target.getPlayerName() @ "\c5.");
-	%this.bottomPrint("<just:center>\c0Your target is <color:" @ %color @ ">" @ %this.target.getPlayerName() @ "\c5.",5);
-	schedule(getRandom(10000,20000),0,messageClient,%target,'',"\c0You are being hunted.");
-}
-
-function GameConnection::pickHunter(%this) //checks for a client without a target and sets them to the client
-{
-	%mini = %this.minigame;
-	for(%i=0; %i < %mini.numMembers; %i++)
-	{
-		%cl = %mini.member[%i];
-		if(%cl == %this)
-			continue;
-		if(isObject(%cl.target))
-			continue;
-
-		%hunter = %cl;
-	}
-
-	if(isObject(%hunter))
-		%hunter.setTarget(%this);
-}
-
-function GameConnection::pickColor(%this)
-{
-	%mini = getMinigameFromObject(%this);
-
-	%rgb = getRandom(50,255) SPC getRandom(50,255) SPC getRandom(50,255);
-	%rgba = getWord(%rgb,0) / 255 SPC getWord(%rgb,1) / 255 SPC getWord(%rgb,2) / 255 SPC 1;
-	%hex = Slayer_Support::RgbToHex(%rgb);
-
-	%this.colorRGB = %rgba;
-	%this.colorHex = %hex;
-
-	if(%mini.colorNames && isObject(%client.player))
-	{
-		%client.player.setShapeNameColor(%rgba);
-		%client.player.setNodeColor("chest",%rgba);
-	}
-}
+//^^^^COMPASS^^^^/////////////////////////////////////////////////////////////////////////////////////////////////////////////
